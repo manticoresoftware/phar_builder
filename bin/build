@@ -1,0 +1,133 @@
+#!/usr/bin/env -S php -dphar.readonly=0
+<?php
+define('BUILD_DIR', './build');
+
+$opts = getopt('', ['template:', 'index:', 'name:', 'package:']);
+if (!$opts) {
+  die('Usage: bin/build --name="Package name" --package=package --index="src/main.php"' . PHP_EOL);
+}
+
+if (!isset($opts['name'])) {
+  die('Error: you should pass --name with name of project to build' . PHP_EOL);
+}
+
+if (!isset($opts['package'])) {
+  die('Error: you should pass --package with binary name to build' . PHP_EOL);
+}
+
+if (!isset($opts['index']) || !is_file($opts['index'])) {
+  die('Error: you should pass --index and set correct path to the entrypoint PHP file' . PHP_EOL);
+}
+
+$TPL_PATH = realpath(__DIR__ . '/../templates');
+$TEMPLATES = glob("$TPL_PATH/*") ?: [];
+$template = $opts['template'] ?? null;
+if ($template && !in_array($template, array_map('basename', $TEMPLATES))) {
+  die('Error: you passed unexisting template to use. Check templates dir for allowed templates' . PHP_EOL);
+}
+
+$binFile = BUILD_DIR . '/' . $opts['package'];
+$pharFile = $binFile . '.phar';
+if (file_exists($pharFile)) {
+  unlink($pharFile);
+}
+
+if (file_exists($pharFile . '.gz')) {
+  unlink($pharFile . '.gz');
+}
+
+if (is_dir(BUILD_DIR)) {
+  exec('rm -fr ' . BUILD_DIR);
+}
+mkdir(BUILD_DIR, 0755);
+
+$phar = new Phar($pharFile);
+$phar->startBuffering();
+$default_stub = $phar->createDefaultStub($opts['index']);
+$phar->buildFromDirectory('.', '/^\.\/src\/.+$/');
+$phar->setStub($default_stub);
+$phar->addFile(BUILD_DIR . '/../APP_VERSION', 'APP_VERSION');
+
+// Now add all deps required by composer
+// We create new fake vendor and install only no dev packages
+// just because there is no way to dump autoload config of non dev-only
+copy('composer.json', BUILD_DIR . '/composer.json');
+copy('composer.lock', BUILD_DIR . '/composer.lock');
+shell_exec('cd ' . BUILD_DIR . ' && composer install --no-dev --optimize-autoloader');
+$buildVendorDir = BUILD_DIR . '/vendor';
+add_directory_to_phar($buildVendorDir, $phar, 'vendor');
+// Done with composer
+
+$phar->stopBuffering();
+// TODO: We can use phar as a binary with proper length deduction
+// system('sed  -i "1i #!/usr/bin/env manticore-executor" ' . $pharFile); // +36
+// Remove chdir($origdir)
+system('sed -i.bak "287,1d" ' . $pharFile); // -17
+// Update LEN to make it work
+system('sed -i.bak "s/LEN = 6646/LEN = 6629/" ' . $pharFile);
+// TODO: we should add gz to manticore-executor or do not use it
+// $phar->compressFiles(Phar::GZ);
+
+// Now update signature
+$pharContent = file_get_contents($pharFile);
+// $oldSignature = substr($pharContent, -40, -8);
+$signatureSuffix = substr($pharContent, -8);
+$pharData = substr($pharContent, 0, -40);
+$newSignature = hash('sha256', $pharData, true) . $signatureSuffix;
+file_put_contents($pharFile, $pharData . $newSignature);
+
+$templates = $template ? [$TPL_PATH . '/' . $template] : $TEMPLATES;
+echo 'Build for templates: ' . implode(',', array_map(basename(...), $templates)) . PHP_EOL;
+
+foreach ($templates as $template) {
+  $content = file_get_contents($template);
+  $content = strtr($content, [
+    '__NAME__' => $opts['name'],
+    '__PACKAGE__' => $opts['package'],
+    '__CONTENT_HEX__' => bin2hex(file_get_contents($pharFile)),
+  ]);
+
+  $extension = basename($template);
+  $curFile = $binFile . '.' . $extension;
+  file_put_contents($curFile, $content);
+  chmod($curFile, 0777);
+  echo '- ' . $curFile . PHP_EOL;
+
+  // Make identical copy for shell script without extension
+  // to make it easier for all things we already have in CI
+  if ($extension === 'sh') {
+    copy($curFile, $binFile);
+    chmod($binFile, 0777);
+    echo '- ' . $binFile . PHP_EOL;
+  }
+}
+
+/**
+ * This is helper to add directory files recursively to the phar archive
+ *
+ * @param string $dir
+ * @param Phar $phar
+ * @param ?string $alias
+ * @return void
+ */
+function add_directory_to_phar(string $dir, Phar $phar, ?string $alias = null): void {
+  if (!is_dir($dir)) {
+    die("The directory to add does not exist: '$dir'");
+  }
+
+  $iterator = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator($dir),
+    RecursiveIteratorIterator::CHILD_FIRST
+  );
+
+  $prefixLen = strlen($dir);
+  $prefix = $alias ?: $dir;
+  /** @var SplFile $file */
+  foreach ($iterator as $file) {
+    if (!$file->isFile()) {
+      continue;
+    }
+    $filePath = $file->getPathName();
+    $phar->addFile($filePath, $prefix . substr($filePath, $prefixLen));
+  }
+}

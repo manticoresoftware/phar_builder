@@ -1,0 +1,52 @@
+function Convert-HexToBinary {
+  param([string]$Hex)
+
+  $binary = new-object byte[] ($Hex.Length / 2)
+  for ($i = 0; $i -lt $Hex.Length; $i += 2) {
+    $binary[$i / 2] = [System.Convert]::ToByte($Hex.Substring($i, 2), 16)
+  }
+  return $binary
+}
+
+$executor = ""
+$registryKey = "HKLM:\SOFTWARE\WOW6432Node\Manticore Software LTD"
+$valueName = "manticore"
+
+try {
+    $registryValue = (Get-ItemProperty -Path $registryKey).$valueName
+} catch {
+    Write-Error "Failed to read the registry value $valueName from $registryKey. The script will exit now."
+    exit 1
+}
+$executor = "$registryValue\bin\manticore-executor\manticore-executor.exe"
+if (!(Test-Path $executor)) {
+    Write-Error "Failed to find executor by using the following path: $executor"
+    exit 1
+}
+
+$env:MANTICORE_SEARCHD = "'$registryValue\bin\searchd.exe'"
+
+$executorVersion = (& $executor -v | Select-String -Pattern "[0-9]\.[0-9]" | Select-Object -First 1).Line.Split(" ")[1]
+$minVersion = "__PHP_VERSION__"
+if ([version]$executorVersion -lt [version]$minVersion) {
+    Write-Error "__NAME__ requires php $minVersion+"
+    exit 1
+}
+
+$tmp = & $executor -r "echo sys_get_temp_dir();"
+$phpFile = "$tmp\__PACKAGE__.phar"
+
+$selfTs = (Get-ChildItem -Path $PSCommandPath).LastWriteTime
+if (Test-Path -Path $phpFile) {
+    $pharTs = (Get-ChildItem -Path $phpFile).LastWriteTime
+} else {
+    $pharTs = [datetime]0
+}
+
+if ($selfTs -gt $pharTs) {
+    $hex = "__CONTENT_HEX__"
+    $binaryContent = Convert-HexToBinary $hex
+    [System.IO.File]::WriteAllBytes($phpFile, $binaryContent)
+}
+
+& $executor -n $phpFile $args
