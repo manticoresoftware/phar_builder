@@ -1,8 +1,8 @@
 FROM manticoresearch/manticore-executor:0.6.4-dev
 
 ARG TARGET_ARCH="amd64"
-ENV MANTICORE_REV="9dcd3f47d12d8c40e20db030d2f2ded6ba57a795"
-ENV COLUMNAR_REV='2ca756ce46520d514022d4d145009e362ba9cb74'
+ENV MANTICORE_REV='94dd63a8a6957df1e587a4dddd7808ac52397e77'
+ENV COLUMNAR_REV='37e6c0130ec14e5864a4bfd0602e66f62bfb1a43'
 ENV EXECUTOR_VERSION="0.6.4-230205-cdc5552"
 
 # Build manticore and columnar first
@@ -37,7 +37,7 @@ RUN apk update && \
 # alter bash prompt
 ENV PS1A="\u@manticore-executor-kit:\w> "
 RUN echo 'PS1=$PS1A' >> ~/.bashrc && \
-  echo 'figlet -w 120 Manticore Buddy Test Kit' >> ~/.bashrc
+  echo 'figlet -w 120 Manticore Executor Kit' >> ~/.bashrc
 
 RUN mkdir -p /var/run/manticore && \
   bash -c "mkdir -p /var/{run,log,lib}/manticore-test" && \
