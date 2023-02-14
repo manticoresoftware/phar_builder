@@ -27,12 +27,6 @@ if (!(Test-Path $executor)) {
 $env:MANTICORE_SEARCHD = "'$registryValue\bin\searchd.exe'"
 
 $executorVersion = (& $executor -v | Select-String -Pattern "[0-9]\.[0-9]" | Select-Object -First 1).Line.Split(" ")[1]
-$minVersion = "__PHP_VERSION__"
-if ([version]$executorVersion -lt [version]$minVersion) {
-    Write-Error "__NAME__ requires php $minVersion+"
-    exit 1
-}
-
 $tmp = & $executor -r "echo sys_get_temp_dir();"
 $phpFile = "$tmp\__PACKAGE__.phar"
 
