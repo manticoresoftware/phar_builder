@@ -24,7 +24,8 @@ if (!(Test-Path $executor)) {
     exit 1
 }
 
-$env:MANTICORE_SEARCHD = "'$registryValue\bin\searchd.exe'"
+$env:MANTICORE_SEARCHD = "$registryValue\bin\searchd.exe"
+$env:MANTICORE_CONFIG ="$registryValue\etc\manticoresearch\manticore.conf"
 
 $executorVersion = (& $executor -v | Select-String -Pattern "[0-9]\.[0-9]" | Select-Object -First 1).Line.Split(" ")[1]
 $tmp = & $executor -r "echo sys_get_temp_dir();"
