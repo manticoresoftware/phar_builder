@@ -57,7 +57,7 @@ shell_exec('cd ' . BUILD_DIR . ' && composer install --no-dev --optimize-autoloa
 $buildVendorDir = BUILD_DIR . '/vendor';
 add_directory_to_phar($buildVendorDir, $phar, 'vendor');
 // Done with composer
-
+$phar->compressFiles(Phar::GZ);
 $phar->stopBuffering();
 // TODO: We can use phar as a binary with proper length deduction
 // system('sed  -i "1i #!/usr/bin/env manticore-executor" ' . $pharFile); // +36
@@ -65,8 +65,6 @@ $phar->stopBuffering();
 system('sed -i.bak "287,1d" ' . $pharFile); // -17
 // Update LEN to make it work
 system('sed -i.bak "s/LEN = 6646/LEN = 6629/" ' . $pharFile);
-// TODO: we should add gz to manticore-executor or do not use it
-// $phar->compressFiles(Phar::GZ);
 
 // Now update signature
 $pharContent = file_get_contents($pharFile);
@@ -74,7 +72,8 @@ $pharContent = file_get_contents($pharFile);
 $signatureSuffix = substr($pharContent, -8);
 $pharData = substr($pharContent, 0, -40);
 $newSignature = hash('sha256', $pharData, true) . $signatureSuffix;
-file_put_contents($pharFile, $pharData . $newSignature);
+$pharContent = $pharData . $newSignature;
+file_put_contents($pharFile, $pharContent);
 
 $templates = $template ? [$TPL_PATH . '/' . $template] : $TEMPLATES;
 echo 'Build for templates: ' . implode(',', array_map(basename(...), $templates)) . PHP_EOL;
@@ -84,7 +83,7 @@ foreach ($templates as $template) {
   $content = strtr($content, [
     '__NAME__' => $opts['name'],
     '__PACKAGE__' => $opts['package'],
-    '__CONTENT_HEX__' => bin2hex(file_get_contents($pharFile)),
+    '__CONTENT_HEX__' => bin2hex($pharContent),
   ]);
 
   $extension = basename($template);
