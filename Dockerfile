@@ -1,7 +1,7 @@
-FROM manticoresearch/manticore-executor:0.6.4-dev
+FROM manticoresearch/manticore-executor:0.6.6-dev
 
 ARG TARGET_ARCH="amd64"
-ENV MANTICORE_REV='94dd63a8a6957df1e587a4dddd7808ac52397e77'
+ENV MANTICORE_REV='e7d690f1c90c6ca3f4ba2474a705cc58e3752c9d'
 ENV COLUMNAR_REV='37e6c0130ec14e5864a4bfd0602e66f62bfb1a43'
 ENV EXECUTOR_VERSION="0.6.4-230205-cdc5552"
 
@@ -68,4 +68,4 @@ searchd {\n\
 ENTRYPOINT ["tail"]
 CMD ["-f", "/dev/null"]
 
-# docker build -t manticoresearch/manticore-executor-kit:0.6.4  -f Dockerfile .
+# docker build -t manticoresearch/manticore-executor-kit:0.6.6  -f Dockerfile .
