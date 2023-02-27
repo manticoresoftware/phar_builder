@@ -1,9 +1,9 @@
 FROM manticoresearch/manticore-executor:0.6.6-dev
 
 ARG TARGET_ARCH="amd64"
-ENV MANTICORE_REV='e7d690f1c90c6ca3f4ba2474a705cc58e3752c9d'
-ENV COLUMNAR_REV='37e6c0130ec14e5864a4bfd0602e66f62bfb1a43'
-ENV EXECUTOR_VERSION="0.6.4-230205-cdc5552"
+ENV MANTICORE_REV='e7304376c55a962e572886e0f2db27381e4ff9f5'
+ENV COLUMNAR_REV='33aa40b8f3fdf10e9e740c55b007c966ef5369af'
+ENV EXECUTOR_VERSION="0.6.6-230220-ad538e9"
 
 # Build manticore and columnar first
 ENV BUILD_DEPS="curl autoconf automake cmake alpine-sdk openssl-dev bison flex git boost-static boost-dev curl-dev"
@@ -30,7 +30,7 @@ RUN apk update && \
     apache2-utils coreutils neovim git && \
   mv /usr/bin/manticore-executor /usr/bin/manticore-executor-dev && \
   ln -sf /usr/bin/manticore-executor-dev /usr/bin/php && \
-  curl -sSL https://github.com/manticoresoftware/executor/releases/download/v0.6.4/manticore-executor_${EXECUTOR_VERSION}_linux_${TARGET_ARCH}.tar.gz | tar -xzf - && \
+  curl -sSL https://github.com/manticoresoftware/executor/releases/download/v0.6.6/manticore-executor_${EXECUTOR_VERSION}_linux_${TARGET_ARCH}.tar.gz | tar -xzf - && \
   mv manticore-executor_${EXECUTOR_VERSION}_linux_${TARGET_ARCH}/manticore-executor /usr/bin && \
   rm -fr manticore-executor_${EXECUTOR_VERSION}_linux_${TARGET_ARCH}
 
