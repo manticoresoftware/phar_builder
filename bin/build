@@ -45,7 +45,11 @@ $phar = new Phar($pharFile);
 $phar->startBuffering();
 $default_stub = $phar->createDefaultStub($opts['index']);
 $phar->buildFromDirectory('.', '/^\.\/src\/.+$/');
-$phar->setStub($default_stub);
+$stub = strtr($default_stub, [
+  'chdir($origdir);' => '',
+  'LEN = 6646' => 'LEN = 6630',
+]);
+$phar->setStub($stub);
 $phar->addFile(BUILD_DIR . '/../APP_VERSION', 'APP_VERSION');
 
 // Now add all deps required by composer
@@ -59,21 +63,7 @@ add_directory_to_phar($buildVendorDir, $phar, 'vendor');
 // Done with composer
 $phar->compressFiles(Phar::GZ);
 $phar->stopBuffering();
-// TODO: We can use phar as a binary with proper length deduction
-// system('sed  -i "1i #!/usr/bin/env manticore-executor" ' . $pharFile); // +36
-// Remove chdir($origdir)
-system('sed -i.bak "287,1d" ' . $pharFile); // -17
-// Update LEN to make it work
-system('sed -i.bak "s/LEN = 6646/LEN = 6629/" ' . $pharFile);
-
-// Now update signature
 $pharContent = file_get_contents($pharFile);
-// $oldSignature = substr($pharContent, -40, -8);
-$signatureSuffix = substr($pharContent, -8);
-$pharData = substr($pharContent, 0, -40);
-$newSignature = hash('sha256', $pharData, true) . $signatureSuffix;
-$pharContent = $pharData . $newSignature;
-file_put_contents($pharFile, $pharContent);
 
 $templates = $template ? [$TPL_PATH . '/' . $template] : $TEMPLATES;
 echo 'Build for templates: ' . implode(',', array_map(basename(...), $templates)) . PHP_EOL;
