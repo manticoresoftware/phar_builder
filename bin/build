@@ -59,6 +59,9 @@ copy('composer.json', BUILD_DIR . '/composer.json');
 copy('composer.lock', BUILD_DIR . '/composer.lock');
 shell_exec('cd ' . BUILD_DIR . ' && composer install --no-dev --optimize-autoloader');
 $buildVendorDir = BUILD_DIR . '/vendor';
+// Remove tests from vendor dir
+shell_exec('find ' . $buildVendorDir . ' -type d -name tests | xargs rm -fr');
+// Finally add cleaned version to phar
 add_directory_to_phar($buildVendorDir, $phar, 'vendor');
 // Done with composer
 $phar->compressFiles(Phar::GZ);
@@ -104,8 +107,11 @@ function add_directory_to_phar(string $dir, Phar $phar, ?string $alias = null): 
     die("The directory to add does not exist: '$dir'");
   }
 
+  $iteratorFlags = FilesystemIterator::KEY_AS_PATHNAME
+    | FilesystemIterator::CURRENT_AS_FILEINFO
+    | FilesystemIterator::FOLLOW_SYMLINKS;
   $iterator = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator($dir),
+    new RecursiveDirectoryIterator($dir, $iteratorFlags),
     RecursiveIteratorIterator::CHILD_FIRST
   );
 
