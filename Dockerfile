@@ -1,9 +1,9 @@
 FROM manticoresearch/manticore-executor:0.6.6-dev
 
-ARG TARGET_ARCH="amd64"
-ENV MANTICORE_REV='38edf562fcd1f311cb8523ade7fabfaa38934741'
-ENV COLUMNAR_REV='ee87d118fde0d506c178e3f452ee4041df66ed53'
-ENV EXECUTOR_VERSION="0.6.6-230220-ad538e9"
+ARG TARGET_ARCH='amd64'
+ARG MANTICORE_REV='58d8180e300f7756b5e35a89d2012bf88ef8bfa6'
+ARG COLUMNAR_REV='f6948fc706369cf86dc18908d7ead167bade16e4'
+ENV EXECUTOR_VERSION='0.6.6-230220-ad538e9'
 
 # Build manticore and columnar first
 ENV BUILD_DEPS="curl autoconf automake cmake alpine-sdk openssl-dev bison flex git boost-static boost-dev curl-dev"
@@ -68,4 +68,9 @@ searchd {\n\
 ENTRYPOINT ["tail"]
 CMD ["-f", "/dev/null"]
 
+
+# Building dev version
 # docker build -t manticoresearch/manticore-executor-kit:0.6.6  -f Dockerfile .
+
+# Building release version
+# docker build --build-arg MANTICORE_REV=manticore-6.0.4 --build-arg COLUMNAR_REV=columnar-2.0.4 -t manticoresearch/manticore-executor-kit:0.6.6-6.0.4 -f Dockerfile .
