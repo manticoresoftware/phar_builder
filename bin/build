@@ -51,6 +51,7 @@ $stub = strtr($default_stub, [
 ]);
 $phar->setStub($stub);
 $phar->addFile(BUILD_DIR . '/../APP_VERSION', 'APP_VERSION');
+$phar->addFile(BUILD_DIR . '/../composer.json', 'composer.json');
 
 // Now add all deps required by composer
 // We create new fake vendor and install only no dev packages
