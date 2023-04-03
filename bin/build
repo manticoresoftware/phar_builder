@@ -45,9 +45,13 @@ $phar = new Phar($pharFile);
 $phar->startBuffering();
 $default_stub = $phar->createDefaultStub($opts['index']);
 $phar->buildFromDirectory('.', '/^\.\/src\/.+$/');
+$default_stub = substr($default_stub, 0, 6)
+  . 'putenv("REALCWD=".getcwd());'
+  . substr($default_stub, 6)
+;
 $stub = strtr($default_stub, [
   'chdir($origdir);' => '',
-  'LEN = 6646' => 'LEN = 6630',
+  'LEN = 6646' => 'LEN = 6658',
 ]);
 $phar->setStub($stub);
 $phar->addFile(BUILD_DIR . '/../APP_VERSION', 'APP_VERSION');
