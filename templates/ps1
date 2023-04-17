@@ -28,20 +28,7 @@ $env:MANTICORE_SEARCHD = "$registryValue\bin\searchd.exe"
 $env:MANTICORE_CONFIG ="$registryValue\etc\manticoresearch\manticore.conf"
 
 $executorVersion = (& $executor -v | Select-String -Pattern "[0-9]\.[0-9]" | Select-Object -First 1).Line.Split(" ")[1]
-$tmp = & $executor -r "echo sys_get_temp_dir();"
-$phpFile = "$tmp\__PACKAGE__.phar"
-
-$selfTs = (Get-ChildItem -Path $PSCommandPath).LastWriteTime
-if (Test-Path -Path $phpFile) {
-    $pharTs = (Get-ChildItem -Path $phpFile).LastWriteTime
-} else {
-    $pharTs = [datetime]0
-}
-
-if ($selfTs -gt $pharTs) {
-    $hex = "__CONTENT_HEX__"
-    $binaryContent = Convert-HexToBinary $hex
-    [System.IO.File]::WriteAllBytes($phpFile, $binaryContent)
-}
+$srcDir = "$registryValue\share\modules\__PACKAGE__"
+$phpFile = "$srcDir\src\main.php"
 
 & $executor -n $phpFile $args

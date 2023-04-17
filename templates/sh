@@ -5,9 +5,18 @@ if [[ -z "$executor" ]]; then
   exit 1
 fi
 
-tmp=$($executor -r 'echo sys_get_temp_dir();')
-php_file="$tmp"/__PACKAGE__.phar
-self_ts=$(date -r "$0" +%s)
-phar_ts=$(test -f "$php_file" && date -r "$_" +%s || echo 0)
-test "$self_ts" -gt "$phar_ts" && echo '<?php file_put_contents("'"$php_file"'", hex2bin("__CONTENT_HEX__"));' | $executor
-exec $executor -n "$php_file" "$@"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+# Try to find where is the modules are stored
+if [ -d /usr/share/manticore/modules/__PACKAGE__ ]; then
+  src_dir=/usr/share/manticore/modules/__PACKAGE__;
+elif [ -d /usr/local/share/manticore/modules/__PACKAGE__ ]; then
+  src_dir=/usr/share/manticore/modules/__PACKAGE__;
+elif [ -d /opt/homebrew/share/manticore/modules/__PACKAGE__ ]; then
+  src_dir=/opt/homebrew/share/manticore/modules/__PACKAGE__;
+elif [ -d "$SCRIPT_DIR/share/modules/__PACKAGE__" ]; then
+  src_dir="$SCRIPT_DIR/share/modules/__PACKAGE__"
+else
+  echo >&2 Failed to find __PACKAGE__ path in predefined share modules.
+  exit 1
+fi
+exec $executor -n "$src_dir/src/main.php" "$@"

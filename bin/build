@@ -2,9 +2,9 @@
 <?php
 define('BUILD_DIR', './build');
 
-$opts = getopt('', ['template:', 'index:', 'name:', 'package:']);
+$opts = getopt('', ['template:', 'name:', 'package:']);
 if (!$opts) {
-  die('Usage: bin/build --name="Package name" --package=package --index="src/main.php"' . PHP_EOL);
+  die('Usage: bin/build --name="Package name" --package=package' . PHP_EOL);
 }
 
 if (!isset($opts['name'])) {
@@ -15,10 +15,6 @@ if (!isset($opts['package'])) {
   die('Error: you should pass --package with binary name to build' . PHP_EOL);
 }
 
-if (!isset($opts['index']) || !is_file($opts['index'])) {
-  die('Error: you should pass --index and set correct path to the entrypoint PHP file' . PHP_EOL);
-}
-
 $TPL_PATH = realpath(__DIR__ . '/../templates');
 $TEMPLATES = glob("$TPL_PATH/*") ?: [];
 $template = $opts['template'] ?? null;
@@ -27,51 +23,25 @@ if ($template && !in_array($template, array_map('basename', $TEMPLATES))) {
 }
 
 $binFile = BUILD_DIR . '/' . $opts['package'];
-$pharFile = $binFile . '.phar';
-if (file_exists($pharFile)) {
-  unlink($pharFile);
-}
-
-if (file_exists($pharFile . '.gz')) {
-  unlink($pharFile . '.gz');
-}
+$srcDir = BUILD_DIR . '/share/modules/' . $opts['package'];
 
 if (is_dir(BUILD_DIR)) {
   exec('rm -fr ' . BUILD_DIR);
 }
 mkdir(BUILD_DIR, 0755);
-
-$phar = new Phar($pharFile);
-$phar->startBuffering();
-$default_stub = $phar->createDefaultStub($opts['index']);
-$phar->buildFromDirectory('.', '/^\.\/src\/.+$/');
-$default_stub = substr($default_stub, 0, 6)
-  . 'putenv("REALCWD=".getcwd());'
-  . substr($default_stub, 6)
-;
-$stub = strtr($default_stub, [
-  'chdir($origdir);' => '',
-  'LEN = 6646' => 'LEN = 6658',
-]);
-$phar->setStub($stub);
-$phar->addFile(BUILD_DIR . '/../APP_VERSION', 'APP_VERSION');
-$phar->addFile(BUILD_DIR . '/../composer.json', 'composer.json');
+mkdir($srcDir, 0755, true);
 
 // Now add all deps required by composer
 // We create new fake vendor and install only no dev packages
 // just because there is no way to dump autoload config of non dev-only
-copy('composer.json', BUILD_DIR . '/composer.json');
-copy('composer.lock', BUILD_DIR . '/composer.lock');
-shell_exec('cd ' . BUILD_DIR . ' && composer install --no-dev --optimize-autoloader');
-$buildVendorDir = BUILD_DIR . '/vendor';
+shell_exec("cp -r src '$srcDir/src'");
+copy('APP_VERSION', $srcDir . '/APP_VERSION');
+copy('composer.json', $srcDir . '/composer.json');
+copy('composer.lock', $srcDir . '/composer.lock');
+shell_exec('cd ' . $srcDir . ' && composer install --prefer-dist --no-dev --optimize-autoloader');
+$buildVendorDir = $srcDir . '/vendor';
 // Remove tests from vendor dir
 shell_exec('find ' . $buildVendorDir . ' -type d -name tests | xargs rm -fr');
-// Finally add cleaned version to phar
-add_directory_to_phar($buildVendorDir, $phar, 'vendor');
-// Done with composer
-$phar->compressFiles(Phar::GZ);
-$phar->stopBuffering();
-$pharContent = file_get_contents($pharFile);
 
 $templates = $template ? [$TPL_PATH . '/' . $template] : $TEMPLATES;
 echo 'Build for templates: ' . implode(',', array_map(basename(...), $templates)) . PHP_EOL;
@@ -81,7 +51,6 @@ foreach ($templates as $template) {
   $content = strtr($content, [
     '__NAME__' => $opts['name'],
     '__PACKAGE__' => $opts['package'],
-    '__CONTENT_HEX__' => bin2hex($pharContent),
   ]);
 
   $extension = basename($template);
@@ -99,35 +68,3 @@ foreach ($templates as $template) {
   }
 }
 
-/**
- * This is helper to add directory files recursively to the phar archive
- *
- * @param string $dir
- * @param Phar $phar
- * @param ?string $alias
- * @return void
- */
-function add_directory_to_phar(string $dir, Phar $phar, ?string $alias = null): void {
-  if (!is_dir($dir)) {
-    die("The directory to add does not exist: '$dir'");
-  }
-
-  $iteratorFlags = FilesystemIterator::KEY_AS_PATHNAME
-    | FilesystemIterator::CURRENT_AS_FILEINFO
-    | FilesystemIterator::FOLLOW_SYMLINKS;
-  $iterator = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator($dir, $iteratorFlags),
-    RecursiveIteratorIterator::CHILD_FIRST
-  );
-
-  $prefixLen = strlen($dir);
-  $prefix = $alias ?: $dir;
-  /** @var SplFile $file */
-  foreach ($iterator as $file) {
-    if (!$file->isFile()) {
-      continue;
-    }
-    $filePath = $file->getPathName();
-    $phar->addFile($filePath, $prefix . substr($filePath, $prefixLen));
-  }
-}
