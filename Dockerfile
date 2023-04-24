@@ -28,7 +28,7 @@ RUN apk update && apk add curl gcc vim libcurl $BUILD_DEPS && \
 
 # Get production version and keep dev for executor
 RUN apk update && \
-  apk add bash figlet mysql-client iproute2 \
+  apk add bash mysql-client iproute2 \
     apache2-utils coreutils neovim git && \
   mv /usr/bin/manticore-executor /usr/bin/manticore-executor-dev && \
   ln -sf /usr/bin/manticore-executor-dev /usr/bin/php && \
@@ -37,9 +37,8 @@ RUN apk update && \
   rm -fr manticore-executor_${EXECUTOR_VERSION}_linux_${TARGET_ARCH}
 
 # alter bash prompt
-ENV PS1A="\u@manticore-executor-kit:\w> "
-RUN echo 'PS1=$PS1A' >> ~/.bashrc && \
-  echo 'figlet -w 120 Manticore Executor Kit' >> ~/.bashrc
+ENV PS1A="kit:\w> "
+RUN echo 'PS1=$PS1A' >> ~/.bashrc
 
 RUN mkdir -p /var/run/manticore && \
   bash -c "mkdir -p /var/{run,log,lib}/manticore-test" && \
