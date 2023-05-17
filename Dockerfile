@@ -3,6 +3,7 @@ FROM manticoresearch/manticore-executor:0.6.9-dev
 ARG TARGET_ARCH='amd64'
 ARG MANTICORE_REV='c86d78c3dd0a21705afc1130deb6f47f7b2b9e6f'
 ARG COLUMNAR_REV='8171c1adecb46fb7144618b403e49b6ec4b683ec'
+ARG BUDDY_REV='84766dfcb972b44da62f0237a632b5a02e55e01d'
 ENV EXECUTOR_VERSION='0.6.9-230330-35089f4'
 
 # Build manticore and columnar first
@@ -36,6 +37,17 @@ RUN apk update && \
   mv manticore-executor_${EXECUTOR_VERSION}_linux_${TARGET_ARCH}/manticore-executor /usr/bin && \
   rm -fr manticore-executor_${EXECUTOR_VERSION}_linux_${TARGET_ARCH}
 
+RUN cd /usr/local/share/manticore/modules && \
+  git clone https://github.com/manticoresoftware/manticoresearch-buddy.git && \
+  mv manticoresearch-buddy manticore-buddy && \
+  cd manticore-buddy && \
+  git checkout $BUDDY_REV && \
+  git clone https://github.com/manticoresoftware/phar_builder.git && \
+  ./phar_builder/bin/build --name="Manticore Buddy" --package="manticore-buddy" && \
+  mv ./build/manticore-buddy ./bin/manticore-buddy && \
+  composer install && \
+  cd /
+
 # alter bash prompt
 ENV PS1A="kit:\w> "
 RUN echo 'PS1=$PS1A' >> ~/.bashrc
@@ -45,14 +57,15 @@ RUN mkdir -p /var/run/manticore && \
   mkdir -p /usr/share/manticore/morph/ && \
   echo -e 'a\nb\nc\nd\n' > /usr/share/manticore/morph/test
 
-RUN echo -e "common { \n\
+RUN mkdir -p /var/run/mysqld/ && echo -e "common { \n\
     plugin_dir = /usr/local/lib/manticore\n\
     lemmatizer_base = /usr/share/manticore/morph/\n\
 }\n\
 searchd {\n\
-    listen = 0.0.0:9312\n\
-    listen = 0.0.0:9306:mysql\n\
-    listen = 0.0.0:9308:http\n\
+    listen = 9306:mysql41\n\
+    listen = /var/run/mysqld/mysqld.sock:mysql41\n\
+    listen = 9312\n\
+    listen = 9308:http\n\
     log = /var/log/manticore/searchd.log\n\
     query_log = /var/log/manticore/query.log\n\
     pid_file = /var/run/manticore/searchd.pid\n\
