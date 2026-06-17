@@ -2,9 +2,9 @@
 <?php
 define('BUILD_DIR', './build');
 
-$opts = getopt('', ['template:', 'name:', 'package:']);
+$opts = getopt('', ['template:', 'name:', 'package:', 'phar', 'compat-src-main']);
 if (!$opts) {
-  die('Usage: bin/build --name="Package name" --package=package' . PHP_EOL);
+  die('Usage: bin/build --name="Package name" --package=package [--phar] [--compat-src-main]' . PHP_EOL);
 }
 
 if (!isset($opts['name'])) {
@@ -13,6 +13,10 @@ if (!isset($opts['name'])) {
 
 if (!isset($opts['package'])) {
   die('Error: you should pass --package with binary name to build' . PHP_EOL);
+}
+
+if (isset($opts['compat-src-main']) && !isset($opts['phar'])) {
+  die('Error: --compat-src-main requires --phar' . PHP_EOL);
 }
 
 $TPL_PATH = realpath(__DIR__ . '/../templates');
@@ -24,6 +28,7 @@ if ($template && !in_array($template, array_map('basename', $TEMPLATES))) {
 
 $binFile = BUILD_DIR . '/' . $opts['package'];
 $srcDir = BUILD_DIR . '/share/modules/' . $opts['package'];
+$entrypoint = 'src/main.php';
 
 if (is_dir(BUILD_DIR)) {
   exec('rm -fr ' . BUILD_DIR);
@@ -46,6 +51,7 @@ shell_exec('find ' . $buildVendorDir . ' -type d -name tests | xargs rm -fr');
 $templates = $template ? [$TPL_PATH . '/' . $template] : $TEMPLATES;
 echo 'Build for templates: ' . implode(',', array_map(basename(...), $templates)) . PHP_EOL;
 
+$wrappers = [];
 foreach ($templates as $template) {
   $content = file_get_contents($template);
   $content = strtr($content, [
@@ -57,6 +63,7 @@ foreach ($templates as $template) {
   $curFile = $binFile . '.' . $extension;
   file_put_contents($curFile, $content);
   chmod($curFile, 0777);
+  $wrappers[] = $curFile;
   echo '- ' . $curFile . PHP_EOL;
 
   // Make identical copy for shell script without extension
@@ -64,7 +71,69 @@ foreach ($templates as $template) {
   if ($extension === 'sh') {
     copy($curFile, $binFile);
     chmod($binFile, 0777);
+    $wrappers[] = $binFile;
     echo '- ' . $binFile . PHP_EOL;
   }
 }
 
+if (isset($opts['phar'])) {
+  $pharName = $opts['package'] . '.phar';
+  $pharPath = $srcDir . '/' . $pharName;
+  $tmpPharPath = BUILD_DIR . '/' . $pharName;
+  $entrypoint = str_replace('\\', '/', $entrypoint);
+
+  if (!is_file($srcDir . '/' . $entrypoint)) {
+    die("Error: missing PHAR entrypoint $srcDir/$entrypoint" . PHP_EOL);
+  }
+
+  @unlink($tmpPharPath);
+  @unlink($pharPath);
+  $phar = new Phar($tmpPharPath);
+  $phar->startBuffering();
+  $phar->buildFromDirectory($srcDir);
+  $phar->setStub("#!/usr/bin/env php\n<?php\nPhar::mapPhar('$pharName');\nrequire 'phar://$pharName/$entrypoint';\n__HALT_COMPILER();\n");
+  $phar->stopBuffering();
+  unset($phar);
+
+  rename($tmpPharPath, $pharPath) || die("Error: failed to move PHAR to $pharPath" . PHP_EOL);
+  foreach (new DirectoryIterator($srcDir) as $entry) {
+    if (!$entry->isDot() && $entry->getFilename() !== $pharName) {
+      shell_exec('rm -rf ' . escapeshellarg($entry->getPathname()));
+    }
+  }
+
+  if (isset($opts['compat-src-main'])) {
+    mkdir($srcDir . '/src', 0755, true);
+    file_put_contents($srcDir . '/src/main.php', <<<PHP
+<?php declare(strict_types=1);
+
+\$phar = dirname(__DIR__) . DIRECTORY_SEPARATOR . '$pharName';
+if (!is_file(\$phar)) {
+    fwrite(STDERR, "PHAR payload not found: {\$phar}" . PHP_EOL);
+    exit(1);
+}
+require 'phar://' . \$phar . '/$entrypoint';
+PHP);
+  }
+
+  foreach ($wrappers as $wrapper) {
+    $content = file_get_contents($wrapper);
+    $updated = str_replace(
+      [
+        'elif [ -d "$SCRIPT_DIR/../src/main.php" ]; then' . "\n" . '  src_dir="$SCRIPT_DIR/.."',
+        '"$src_dir/src/main.php"',
+        '"$srcDir\\src\\main.php"',
+      ],
+      [
+        'elif [ -f "$SCRIPT_DIR/../' . $pharName . '" ]; then' . "\n" . '  src_dir="$SCRIPT_DIR/.."',
+        '"$src_dir/' . $pharName . '"',
+        '"$srcDir\\' . $pharName . '"',
+      ],
+      $content
+    );
+    if ($updated === $content || file_put_contents($wrapper, $updated) === false) {
+      die("Error: failed to rewrite wrapper $wrapper to launch $pharName" . PHP_EOL);
+    }
+    echo "- $wrapper (PHAR)" . PHP_EOL;
+  }
+}
